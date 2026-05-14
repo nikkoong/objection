@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body {
+    @apply bg-zinc-950 text-white;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  * {
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center font-bold rounded-2xl px-6 py-4 text-lg transition-all active:scale-95 select-none cursor-pointer disabled:opacity-40 disabled:pointer-events-none;
+  }
+  .btn-primary {
+    @apply btn bg-amber-400 text-zinc-950 hover:bg-amber-300;
+  }
+  .btn-secondary {
+    @apply btn bg-zinc-800 text-white hover:bg-zinc-700;
+  }
+  .btn-danger {
+    @apply btn bg-red-600 text-white hover:bg-red-500;
+  }
+  .btn-success {
+    @apply btn bg-emerald-500 text-white hover:bg-emerald-400;
+  }
+  .btn-sm {
+    @apply px-4 py-2 text-sm rounded-xl;
+  }
+  .card {
+    @apply bg-zinc-900 border border-zinc-800 rounded-3xl p-5;
+  }
+  .input {
+    @apply w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-4 py-4 text-white text-lg focus:outline-none focus:border-amber-400 placeholder-zinc-500;
+  }
+  .label {
+    @apply block text-sm font-semibold text-zinc-400 mb-2 uppercase tracking-wider;
+  }
+  .badge {
+    @apply inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold;
+  }
+}
+
+/* Prevent text selection on game elements */
+.no-select {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Pulse animation for active indicators */
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(251, 191, 36, 0); }
+}
+.pulse-glow {
+  animation: pulse-glow 2s infinite;
+}
+
+/* Slide up animation */
+@keyframes slide-up {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.slide-up {
+  animation: slide-up 0.3s ease-out;
+}
