@@ -1,6 +1,6 @@
 # OBJECTION! — Multiplayer Web Game
 
-Fast-paced courtroom improv party game. No accounts, no downloads — just open a link on your phone.
+Fast-paced courtroom improv party game. No accounts, no downloads: just open a link on your phone.
 
 **OBJECTION!** is a party game where lawyers try to secretly manipulate a witness into saying or doing something, while other lawyers can interrupt with **OBJECTIONS**.
 
@@ -42,8 +42,6 @@ On mobile: use your machine's local IP, e.g. `http://192.168.1.X:5173`
 4. Your game is live. Share the URL with players.
 
 > The free tier spins down after inactivity — the first player to open the link may wait ~30s for a cold start.
-
-See [`HOSTING.md`](./HOSTING.md) for Railway, Fly.io, and self-hosted alternatives.
 
 ---
 
