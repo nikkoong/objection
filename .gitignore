@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Build output (built at deploy time by Render)
+client/dist/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
