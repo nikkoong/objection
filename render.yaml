@@ -1,0 +1,19 @@
+# Render deployment configuration
+# Docs: https://render.com/docs/render-yaml-spec
+#
+# Build command uses --include=dev so that devDependencies (Vite, etc.)
+# are available during the client build step even when NODE_ENV=production.
+
+services:
+  - type: web
+    name: objection-game
+    env: node
+    plan: free
+    buildCommand: npm install --include=dev && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Optional: if you add a custom domain, set it here too
+      # - key: CLIENT_URL
+      #   value: https://your-custom-domain.com
