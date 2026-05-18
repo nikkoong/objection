@@ -57,8 +57,9 @@ function createRoom(hostId, hostName) {
       },
     ],
     timer: {
-      durationSec: cfg.timer.minSec, // placeholder; recalculated at game start (1 min/lawyer)
-      remainingSec: cfg.timer.minSec,
+      durationSec: 60, // waiting-room default: 1 minute per lawyer (minimum 1 lawyer)
+      remainingSec: 60,
+      isAuto: true,
       running: false,
     },
     timerInterval: null,
@@ -226,7 +227,10 @@ function startGame(code, scenarios, targets, timerSec) {
   room.phase = 'playing';
   room.round += 1;
   room.pendingObjection = null;
+  room._timerPausedByObjection = false;
+  room.roundResult = null;
   room.timer = {
+    ...room.timer,
     durationSec: timerDuration,
     remainingSec: timerDuration,
     running: false,
@@ -278,6 +282,7 @@ function endRound(code, reason, winnerLawyerId) {
   clearTimerInterval(room);
   room.timer.running = false;
   room.phase = 'round-end';
+  room._timerPausedByObjection = false;
   room.pendingObjection = null; // clear any in-flight objection
   room.roundResult = { reason, winnerLawyerId: winnerLawyerId || null };
   return room;
@@ -291,7 +296,7 @@ function nextRound(code, scenarios, targets) {
   room.witnessIndex = (room.witnessIndex + 1) % room.players.length;
   // Reset to 'waiting' so startGame's phase guard passes
   room.phase = 'waiting';
-  return startGame(code, scenarios, targets, room.timer.durationSec);
+  return startGame(code, scenarios, targets, room.timer.isAuto ? null : room.timer.durationSec);
 }
 
 function setTimer(code, action) {

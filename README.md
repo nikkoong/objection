@@ -48,8 +48,8 @@ On mobile: use your machine's local IP, e.g. `http://192.168.1.X:5173`
 ## HOW TO PLAY
 
 ### Setup
-- Minimum 3 players (recommended 4–8).
-- One player creates a room, shares the 6-letter code.
+- Minimum 2 players (recommended 4–8).
+- One player creates a room, shares the 4-character room code.
 - Host picks the round timer (2 min for small groups, 4 min for larger).
 - Host starts the game — roles are assigned automatically.
 

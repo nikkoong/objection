@@ -124,8 +124,8 @@ export function GameProvider({ children }) {
     socket.emit('start-game', { code: state.roomCode, timerSec });
   }, [state.roomCode]);
 
-  const setTimerConfig = useCallback((durationSec) => {
-    socket.emit('set-timer-config', { code: state.roomCode, durationSec });
+  const setTimerConfig = useCallback((durationSec, isAuto = false) => {
+    socket.emit('set-timer-config', { code: state.roomCode, durationSec, isAuto });
   }, [state.roomCode]);
 
   const timerAction = useCallback((action) => {
@@ -148,10 +148,6 @@ export function GameProvider({ children }) {
     socket.emit('dismiss-objection', { code: state.roomCode });
   }, [state.roomCode]);
 
-  const awardPoints = useCallback((playerId, points) => {
-    socket.emit('award-points', { code: state.roomCode, playerId, points });
-  }, [state.roomCode]);
-
   const revealTarget = useCallback(() => {
     socket.emit('reveal-target', { code: state.roomCode });
   }, [state.roomCode]);
@@ -165,11 +161,28 @@ export function GameProvider({ children }) {
   }, [state.roomCode]);
 
   const leaveRoom = useCallback(() => {
-    localStorage.removeItem('objection_room_code');
-    socket.disconnect();
-    socket.connect();
-    dispatch({ type: 'LEAVE_ROOM' });
-  }, []);
+    const finalizeLeave = () => {
+      localStorage.removeItem('objection_room_code');
+      socket.disconnect();
+      socket.connect();
+      dispatch({ type: 'LEAVE_ROOM' });
+    };
+
+    if (!state.roomCode || !socket.connected) {
+      finalizeLeave();
+      return;
+    }
+
+    let finished = false;
+    const done = () => {
+      if (finished) return;
+      finished = true;
+      finalizeLeave();
+    };
+
+    socket.emit('leave-room', { code: state.roomCode }, done);
+    setTimeout(done, 300);
+  }, [state.roomCode]);
 
   const clearError = useCallback(() => dispatch({ type: 'CLEAR_ERROR' }), []);
 
@@ -200,7 +213,6 @@ export function GameProvider({ children }) {
     spendToken,
     sustainObjection,
     dismissObjection,
-    awardPoints,
     revealTarget,
     endRound,
     nextRound,

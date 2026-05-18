@@ -124,7 +124,7 @@ export default function Landing() {
       {/* How to play blurb */}
       {mode === null && (
         <p className="text-zinc-600 text-xs text-center max-w-xs leading-relaxed">
-          3–12 players · No accounts needed · Play in person on your phones
+          2–12 players · No accounts needed · Play in person on your phones
         </p>
       )}
     </div>

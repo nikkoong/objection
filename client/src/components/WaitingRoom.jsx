@@ -1,14 +1,5 @@
-import { useState } from 'react';
 import { useGame } from '../context/GameContext';
-
-const TIMER_PRESETS = [
-  { label: '1 min', value: 60 },
-  { label: '2 min', value: 120 },
-  { label: '3 min', value: 180 },
-  { label: '4 min', value: 240 },
-  { label: '5 min', value: 300 },
-  { label: '6 min', value: 360 },
-];
+import { TIMER_MAX_SEC, TIMER_OPTIONS } from '../config/gameConfig';
 
 export default function WaitingRoom() {
   const {
@@ -16,25 +7,24 @@ export default function WaitingRoom() {
     startGame, setTimerConfig, leaveRoom, error, clearError,
   } = useGame();
 
-  // null = "Auto" (1 min per lawyer), number = manual override
-  const [selectedTimer, setSelectedTimer] = useState(null);
-
   const players = roomState?.players || [];
   const canStart = players.length >= 2;
 
   // Auto-calculate: 1 min per lawyer (all players except the witness)
   const lawyerCount = Math.max(players.length - 1, 1);
-  const autoTimerSec = Math.min(lawyerCount * 60, 360); // cap at 6 min
-  const effectiveTimerSec = selectedTimer !== null ? selectedTimer : autoTimerSec;
-  const effectiveLabel = selectedTimer !== null
-    ? TIMER_PRESETS.find((p) => p.value === selectedTimer)?.label
-    : `${Math.round(autoTimerSec / 60)} min`;
+  const autoTimerSec = Math.min(lawyerCount * 60, TIMER_MAX_SEC);
+  const isAutoSelected = roomState?.timer?.isAuto !== false;
+  const configuredTimerSec = roomState?.timer?.durationSec || autoTimerSec;
+  const effectiveTimerSec = isAutoSelected ? autoTimerSec : configuredTimerSec;
+  const effectiveLabel = `${Math.round(effectiveTimerSec / 60)} min`;
 
   function handleTimerChange(val) {
-    // val = null means "back to auto"
-    setSelectedTimer(val);
-    // Broadcast to all players what timer is selected
-    setTimerConfig(val !== null ? val : autoTimerSec);
+    if (val === null) {
+      setTimerConfig(autoTimerSec, true);
+      return;
+    }
+
+    setTimerConfig(val, false);
   }
 
   function handleStart() {
@@ -118,7 +108,7 @@ export default function WaitingRoom() {
           {/* Auto option */}
           <button
             className={`rounded-xl py-3 text-sm font-bold transition-all active:scale-95 w-full ${
-              selectedTimer === null
+              isAutoSelected
                 ? 'bg-amber-400 text-zinc-950'
                 : 'bg-zinc-800 text-zinc-300'
             }`}
@@ -130,11 +120,11 @@ export default function WaitingRoom() {
 
           {/* Manual presets */}
           <div className="grid grid-cols-3 gap-2">
-            {TIMER_PRESETS.map((opt) => (
+            {TIMER_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
                 className={`rounded-xl py-3 text-sm font-bold transition-all active:scale-95 ${
-                  selectedTimer === opt.value
+                  !isAutoSelected && configuredTimerSec === opt.value
                     ? 'bg-amber-400 text-zinc-950'
                     : 'bg-zinc-800 text-zinc-300'
                 }`}

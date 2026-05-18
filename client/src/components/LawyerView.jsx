@@ -9,7 +9,7 @@ function pad(n) {
 
 export default function LawyerView() {
   const {
-    roomState, me, activeLawyer, witness, playerId, isActiveLawyer,
+    roomState, me, playerId, isActiveLawyer,
     spendToken, revealTarget,
   } = useGame();
 

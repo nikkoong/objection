@@ -88,6 +88,36 @@ function startTimerTick(room) {
   }, 1000);
 }
 
+function handlePostRemoval(roomCode, updated) {
+  if (!updated) return;
+
+  // If witness was removed during a live game, auto-end the round (no points)
+  if (updated._witnessDisconnected && updated.phase === 'playing') {
+    updated._witnessDisconnected = false;
+    const ended = gs.endRound(roomCode, 'witness-left', null);
+    if (ended) {
+      broadcastRoom(ended);
+      return;
+    }
+  }
+
+  // If no connected lawyers remain during a live game, auto-end the round (no points)
+  if (updated.phase === 'playing') {
+    const lawyersLeft = updated.players.filter(
+      (player) => player.role === 'lawyer' && player.connected !== false
+    ).length;
+    if (lawyersLeft === 0) {
+      const ended = gs.endRound(roomCode, 'manual', null);
+      if (ended) {
+        broadcastRoom(ended);
+        return;
+      }
+    }
+  }
+
+  broadcastRoom(updated);
+}
+
 // ── Socket handlers ───────────────────────────────────────────────────────────
 
 io.on('connection', (socket) => {
@@ -158,6 +188,7 @@ io.on('connection', (socket) => {
     const caller = room.players.find((p) => p.socketId === socket.id);
     if (!caller || caller.role !== 'witness') return;
     if (!['start', 'pause', 'reset'].includes(action)) return;
+    if (room.pendingObjection) return; // objection must be ruled on before any timer changes
 
     const updated = gs.setTimer(code, action);
     if (!updated) return;
@@ -189,6 +220,7 @@ io.on('connection', (socket) => {
     if (!room || room.phase !== 'playing') return;
     const caller = room.players.find((p) => p.socketId === socket.id);
     if (!caller || caller.role !== 'lawyer') return;
+    if (caller.objectionTokens <= 0) return;
 
     // Cannot object on your own turn
     const activeLawyer = room.players[room.activeLawyerIndex];
@@ -258,24 +290,16 @@ io.on('connection', (socket) => {
     broadcastRoom(result);
   });
 
-  // Award points (witness only, playing phase only, positive integers only)
-  socket.on('award-points', ({ code, playerId, points }) => {
-    const room = gs.getRoom(code);
-    if (!room || room.phase !== 'playing') return;
-    const caller = room.players.find((p) => p.socketId === socket.id);
-    if (!caller || caller.role !== 'witness') return;
-    const safePoints = Math.floor(Number(points));
-    if (!Number.isFinite(safePoints) || safePoints === 0) return;
-    gs.awardPoints(code, playerId, safePoints);
-    broadcastRoom(gs.getRoom(code));
-  });
-
   // Lawyer reveals target and wins the round
   socket.on('reveal-target', ({ code }) => {
     const room = gs.getRoom(code);
     if (!room || room.phase !== 'playing') return;
     const caller = room.players.find((p) => p.socketId === socket.id);
     if (!caller || caller.role !== 'lawyer') return;
+    if (room.pendingObjection) return;
+
+    const activeLawyer = room.players[room.activeLawyerIndex];
+    if (!activeLawyer || activeLawyer.id !== caller.id) return;
 
     // Award points before endRound so they're included in the broadcast
     gs.awardPoints(code, caller.id, gs.cfg.scoring.lawyerRevealLawyer);
@@ -295,6 +319,7 @@ io.on('connection', (socket) => {
     if (!room || room.phase !== 'playing') return;
     const caller = room.players.find((p) => p.socketId === socket.id);
     if (!caller || caller.role !== 'witness') return;
+    if (room.pendingObjection) return;
 
     const ended = gs.endRound(code, 'manual', null);
     if (ended) broadcastRoom(ended);
@@ -323,14 +348,40 @@ io.on('connection', (socket) => {
   });
 
   // Update timer config (host, waiting room only)
-  socket.on('set-timer-config', ({ code, durationSec }) => {
+  socket.on('set-timer-config', ({ code, durationSec, isAuto }) => {
     const room = gs.getRoom(code);
     if (!room || room.phase !== 'waiting') return;
     const caller = room.players.find((p) => p.socketId === socket.id);
     if (!caller || caller.id !== room.hostId) return;
-    room.timer.durationSec = durationSec;
-    room.timer.remainingSec = durationSec;
+
+    const safeDuration = Math.floor(Number(durationSec));
+    if (!Number.isFinite(safeDuration)) return;
+    if (safeDuration < gs.cfg.timer.minSec || safeDuration > gs.cfg.timer.maxSec) return;
+
+    room.timer.durationSec = safeDuration;
+    room.timer.remainingSec = safeDuration;
+    room.timer.isAuto = Boolean(isAuto);
     broadcastRoom(room);
+  });
+
+  // Explicit leave path so intentional leaves do not linger for the reconnect grace period.
+  socket.on('leave-room', ({ code }, ack) => {
+    const room = gs.getRoom(code);
+    if (!room) {
+      if (typeof ack === 'function') ack();
+      return;
+    }
+
+    const caller = room.players.find((player) => player.socketId === socket.id);
+    if (!caller) {
+      if (typeof ack === 'function') ack();
+      return;
+    }
+
+    socket.leave(code);
+    const updated = gs.removePlayerById(code, caller.id);
+    if (typeof ack === 'function') ack();
+    handlePostRemoval(code, updated);
   });
 
   // Disconnect
@@ -350,6 +401,7 @@ function handleDisconnect(socketId) {
   // Soft disconnect: mark as offline but keep them in the room.
   // Give them 30 seconds to reconnect (covers page refresh).
   player.connected = false;
+  player.socketId = null;
 
   // Cancel any existing timeout (shouldn't happen, but be safe)
   if (player._reconnectTimeout) clearTimeout(player._reconnectTimeout);
@@ -363,32 +415,7 @@ function handleDisconnect(socketId) {
 
     const updated = gs.removePlayerById(room.code, player.id);
     if (!updated) return; // room deleted (last player left)
-
-    // If witness hard-removed during a live game, auto-end the round
-    if (updated._witnessDisconnected && updated.phase === 'playing') {
-      updated._witnessDisconnected = false;
-      const ended = gs.endRound(room.code, 'witness-left', null);
-      if (ended) {
-        broadcastRoom(ended);
-        return;
-      }
-    }
-
-    // If all lawyers hard-removed during a live game, auto-end the round
-    if (updated.phase === 'playing') {
-      const lawyersLeft = updated.players.filter(
-        (lp) => lp.role === 'lawyer' && lp.connected !== false
-      ).length;
-      if (lawyersLeft === 0) {
-        const ended = gs.endRound(room.code, 'manual', null);
-        if (ended) {
-          broadcastRoom(ended);
-          return;
-        }
-      }
-    }
-
-    broadcastRoom(updated);
+    handlePostRemoval(room.code, updated);
   }, 30_000);
 
   // Broadcast immediately so other players see the disconnected state
