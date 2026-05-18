@@ -1,4 +1,15 @@
 const cfg = require('./config/gameConfig.json');
+const characterTraits = require('./config/characterTraits.json');
+
+function generateWitnessCharacter() {
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  const age = pick(characterTraits.ages);
+  const job = pick(characterTraits.jobs);
+  const workplace = pick(characterTraits.workplaces);
+  const hobby = pick(characterTraits.hobbies);
+  const trait = pick(characterTraits.traits);
+  return `You are ${age} years old, work as a ${job} at ${workplace}. You like to ${hobby} and are ${trait}.`;
+}
 
 // In-memory store of all rooms
 const rooms = new Map();
@@ -42,11 +53,12 @@ function createRoom(hostId, hostName) {
         objectionTokens: cfg.tokens.defaultPerLawyer,
         role: 'lawyer', // assigned on start
         socketId: hostId,
+        connected: true,
       },
     ],
     timer: {
-      durationSec: cfg.timer.defaultSec,
-      remainingSec: cfg.timer.defaultSec,
+      durationSec: cfg.timer.minSec, // placeholder; recalculated at game start (1 min/lawyer)
+      remainingSec: cfg.timer.minSec,
       running: false,
     },
     timerInterval: null,
@@ -70,7 +82,13 @@ function addPlayer(code, playerId, playerName, socketId) {
   // Always allow reconnection of a known player regardless of phase
   const existing = room.players.find((p) => p.id === playerId);
   if (existing) {
+    // Cancel any pending removal timeout (player reconnected in time)
+    if (existing._reconnectTimeout) {
+      clearTimeout(existing._reconnectTimeout);
+      delete existing._reconnectTimeout;
+    }
     existing.socketId = socketId;
+    existing.connected = true;
     existing.name = name; // allow name refresh on reconnect
     return { room };
   }
@@ -88,6 +106,7 @@ function addPlayer(code, playerId, playerName, socketId) {
     objectionTokens: cfg.tokens.defaultPerLawyer,
     role: 'lawyer',
     socketId,
+    connected: true,
   });
   return { room };
 }
@@ -123,6 +142,35 @@ function removePlayer(code, socketId) {
   return room;
 }
 
+// Remove a player by their persistent playerId (used after grace-period expires)
+function removePlayerById(code, playerId) {
+  const room = rooms.get(code);
+  if (!room) return null;
+
+  const leaving = room.players.find((p) => p.id === playerId);
+  room.players = room.players.filter((p) => p.id !== playerId);
+
+  if (room.players.length === 0) {
+    clearTimerInterval(room);
+    rooms.delete(code);
+    return null;
+  }
+
+  if (!room.players.find((p) => p.id === room.hostId)) {
+    room.hostId = room.players[0].id;
+  }
+
+  if (room.witnessIndex >= room.players.length) {
+    room.witnessIndex = 0;
+  }
+
+  if (leaving && leaving.role === 'witness' && room.phase === 'playing') {
+    room._witnessDisconnected = true;
+  }
+
+  return room;
+}
+
 function startGame(code, scenarios, targets, timerSec) {
   const room = rooms.get(code);
   if (!room) return { error: 'Room not found' };
@@ -145,9 +193,14 @@ function startGame(code, scenarios, targets, timerSec) {
   const tokenCount = isLargeGame
     ? cfg.tokens.largeGamePerLawyer
     : cfg.tokens.defaultPerLawyer;
-  const timerDuration =
-    clampedTimer ||
-    (isLargeGame ? cfg.timer.largeGameDefaultSec : cfg.timer.defaultSec);
+
+  // Default timer: 1 minute per lawyer (everyone except the witness)
+  const lawyerCount = room.players.length - 1;
+  const autoTimerSec = Math.min(
+    Math.max(lawyerCount * 60, cfg.timer.minSec),
+    cfg.timer.maxSec
+  );
+  const timerDuration = clampedTimer || autoTimerSec;
 
   room.players.forEach((p, i) => {
     p.role = i === witnessIdx ? 'witness' : 'lawyer';
@@ -156,6 +209,7 @@ function startGame(code, scenarios, targets, timerSec) {
   });
   const scenario = scenarios[Math.floor(Math.random() * scenarios.length)];
   room.scenario = scenario;
+  room.witnessCharacter = generateWitnessCharacter();
 
   // Assign targets to lawyers
   const lawyers = room.players.filter((p) => p.role === 'lawyer');
@@ -292,9 +346,14 @@ function getRoomStateFor(room, playerId) {
       score: p.score,
       objectionTokens: p.objectionTokens,
       role: p.role,
+      connected: p.connected !== false, // true unless explicitly marked false
     })),
     timer: { ...room.timer },
     myTarget: room.targets[playerId] || null,
+    // Witness-only character paragraph (MadLibs style background facts)
+    witnessCharacter: room.players.find((p) => p.id === playerId)?.role === 'witness'
+      ? (room.witnessCharacter || null)
+      : null,
     // During round-end, reveal all targets
     allTargets: room.phase === 'round-end' ? room.targets : null,
   };
@@ -327,6 +386,7 @@ module.exports = {
   getRoom,
   addPlayer,
   removePlayer,
+  removePlayerById,
   startGame,
   rotateLawyer,
   spendToken,

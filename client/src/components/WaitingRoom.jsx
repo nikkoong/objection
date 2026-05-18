@@ -1,6 +1,14 @@
 import { useState } from 'react';
 import { useGame } from '../context/GameContext';
-import { TIMER_OPTIONS } from '../config/gameConfig';
+
+const TIMER_PRESETS = [
+  { label: '1 min', value: 60 },
+  { label: '2 min', value: 120 },
+  { label: '3 min', value: 180 },
+  { label: '4 min', value: 240 },
+  { label: '5 min', value: 300 },
+  { label: '6 min', value: 360 },
+];
 
 export default function WaitingRoom() {
   const {
@@ -8,20 +16,29 @@ export default function WaitingRoom() {
     startGame, setTimerConfig, leaveRoom, error, clearError,
   } = useGame();
 
-  const [selectedTimer, setSelectedTimer] = useState(
-    roomState?.timer?.durationSec || 120
-  );
+  // null = "Auto" (1 min per lawyer), number = manual override
+  const [selectedTimer, setSelectedTimer] = useState(null);
 
   const players = roomState?.players || [];
   const canStart = players.length >= 2;
 
+  // Auto-calculate: 1 min per lawyer (all players except the witness)
+  const lawyerCount = Math.max(players.length - 1, 1);
+  const autoTimerSec = Math.min(lawyerCount * 60, 360); // cap at 6 min
+  const effectiveTimerSec = selectedTimer !== null ? selectedTimer : autoTimerSec;
+  const effectiveLabel = selectedTimer !== null
+    ? TIMER_PRESETS.find((p) => p.value === selectedTimer)?.label
+    : `${Math.round(autoTimerSec / 60)} min`;
+
   function handleTimerChange(val) {
+    // val = null means "back to auto"
     setSelectedTimer(val);
-    setTimerConfig(val);
+    // Broadcast to all players what timer is selected
+    setTimerConfig(val !== null ? val : autoTimerSec);
   }
 
   function handleStart() {
-    startGame(selectedTimer);
+    startGame(effectiveTimerSec);
   }
 
   function copyCode() {
@@ -29,7 +46,7 @@ export default function WaitingRoom() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col p-6 gap-6 max-w-lg mx-auto">
+    <div className="min-h-screen flex flex-col p-6 gap-5 max-w-lg mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between pt-2">
         <div className="text-2xl font-black text-amber-400">OBJECTION!</div>
@@ -37,9 +54,9 @@ export default function WaitingRoom() {
       </div>
 
       {/* Room code */}
-      <div className="card flex flex-col items-center gap-3" onClick={copyCode}>
+      <div className="card flex flex-col items-center gap-3 cursor-pointer active:opacity-80" onClick={copyCode}>
         <p className="text-zinc-400 text-sm font-semibold uppercase tracking-wider">Room Code</p>
-        <div className="text-6xl font-black tracking-[0.25em] text-amber-400 no-select">
+        <div className="text-6xl font-black tracking-[0.25em] text-amber-400 select-none">
           {roomCode}
         </div>
         <p className="text-zinc-500 text-xs">Tap to copy · Share with friends</p>
@@ -48,7 +65,7 @@ export default function WaitingRoom() {
       {/* Error */}
       {error && (
         <div
-          className="bg-red-900/50 border border-red-700 rounded-2xl px-4 py-3 text-red-300 text-sm"
+          className="bg-red-900/50 border border-red-700 rounded-2xl px-4 py-3 text-red-300 text-sm cursor-pointer"
           onClick={clearError}
         >
           ⚠ {error}
@@ -93,9 +110,27 @@ export default function WaitingRoom() {
       {/* Timer config (host only) */}
       {isHost && (
         <div className="card flex flex-col gap-3">
-          <p className="font-bold text-white">Round Timer</p>
-          <div className="grid grid-cols-4 gap-2">
-            {TIMER_OPTIONS.map((opt) => (
+          <div className="flex items-center justify-between">
+            <p className="font-bold text-white">Round Timer</p>
+            <span className="text-amber-400 font-bold text-sm">{effectiveLabel}</span>
+          </div>
+
+          {/* Auto option */}
+          <button
+            className={`rounded-xl py-3 text-sm font-bold transition-all active:scale-95 w-full ${
+              selectedTimer === null
+                ? 'bg-amber-400 text-zinc-950'
+                : 'bg-zinc-800 text-zinc-300'
+            }`}
+            onClick={() => handleTimerChange(null)}
+          >
+            Auto — {Math.round(autoTimerSec / 60)} min
+            <span className="font-normal ml-1 opacity-70">(1 min × {lawyerCount} lawyer{lawyerCount !== 1 ? 's' : ''})</span>
+          </button>
+
+          {/* Manual presets */}
+          <div className="grid grid-cols-3 gap-2">
+            {TIMER_PRESETS.map((opt) => (
               <button
                 key={opt.value}
                 className={`rounded-xl py-3 text-sm font-bold transition-all active:scale-95 ${
@@ -109,15 +144,12 @@ export default function WaitingRoom() {
               </button>
             ))}
           </div>
-          <p className="text-zinc-500 text-xs">
-            Recommended: 2 min for ≤4 players, 4 min for 5+
-          </p>
         </div>
       )}
 
       {!isHost && (
         <div className="card text-center">
-          <p className="text-zinc-400">Waiting for the host to start the game…</p>
+          <p className="text-zinc-400">Waiting for the host to start…</p>
           <div className="flex justify-center gap-1 mt-3">
             {[0, 1, 2].map((i) => (
               <div
@@ -137,14 +169,13 @@ export default function WaitingRoom() {
           onClick={handleStart}
           disabled={!canStart}
         >
-          Start Game
+          Start Game — {effectiveLabel} timer
         </button>
       )}
 
-      {/* Rules blurb */}
       <div className="text-zinc-600 text-xs text-center leading-relaxed pb-4">
-        Lawyers try to make the Witness say their secret Target.<br />
-        The Witness survives the timer to win.
+        Lawyers try to make the Witness trigger their secret Target.<br />
+        The Witness survives the timer to win the round.
       </div>
 
       <style>{`

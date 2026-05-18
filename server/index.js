@@ -202,6 +202,14 @@ io.on('connection', (socket) => {
 
     // Record the pending objection so the witness can rule
     updated.pendingObjection = { lawyerId: caller.id, lawyerName: caller.name };
+
+    // Auto-pause the timer while the objection is being ruled on
+    if (updated.timer.running) {
+      gs.clearTimerInterval(updated);
+      updated.timer.running = false;
+      updated._timerPausedByObjection = true;
+    }
+
     broadcastRoom(updated);
   });
 
@@ -215,7 +223,16 @@ io.on('connection', (socket) => {
 
     room.pendingObjection = null;
     const updated = gs.rotateLawyer(code);
-    broadcastRoom(updated || room);
+    const result = updated || room;
+
+    // Auto-resume timer if it was paused by the objection
+    if (result._timerPausedByObjection && result.timer.remainingSec > 0) {
+      result._timerPausedByObjection = false;
+      result.timer.running = true;
+      startTimerTick(result);
+    }
+
+    broadcastRoom(result);
   });
 
   // Witness dismisses the objection → objecting lawyer loses another token
@@ -229,7 +246,16 @@ io.on('connection', (socket) => {
     const { lawyerId } = room.pendingObjection;
     room.pendingObjection = null;
     const updated = gs.spendToken(code, lawyerId); // costs objector their second token
-    broadcastRoom(updated || room);
+    const result = updated || room;
+
+    // Auto-resume timer if it was paused by the objection
+    if (result._timerPausedByObjection && result.timer.remainingSec > 0) {
+      result._timerPausedByObjection = false;
+      result.timer.running = true;
+      startTimerTick(result);
+    }
+
+    broadcastRoom(result);
   });
 
   // Award points (witness only, playing phase only, positive integers only)
@@ -317,32 +343,56 @@ io.on('connection', (socket) => {
 function handleDisconnect(socketId) {
   const room = gs.findRoomBySocketId(socketId);
   if (!room) return;
-  const updated = gs.removePlayer(room.code, socketId);
-  if (!updated) return; // room was deleted (0 players left)
 
-  // If witness disconnected during a live game, auto-end the round (no points)
-  if (updated._witnessDisconnected && updated.phase === 'playing') {
-    updated._witnessDisconnected = false;
-    const ended = gs.endRound(room.code, 'witness-left', null);
-    if (ended) {
-      broadcastRoom(ended);
-      return;
-    }
-  }
+  const player = room.players.find((p) => p.socketId === socketId);
+  if (!player) return;
 
-  // If all lawyers disconnected during a live game, auto-end the round (no points)
-  if (updated.phase === 'playing') {
-    const lawyersLeft = updated.players.filter((p) => p.role === 'lawyer').length;
-    if (lawyersLeft === 0) {
-      const ended = gs.endRound(room.code, 'manual', null);
+  // Soft disconnect: mark as offline but keep them in the room.
+  // Give them 30 seconds to reconnect (covers page refresh).
+  player.connected = false;
+
+  // Cancel any existing timeout (shouldn't happen, but be safe)
+  if (player._reconnectTimeout) clearTimeout(player._reconnectTimeout);
+
+  player._reconnectTimeout = setTimeout(() => {
+    // Hard removal after grace period expires
+    const currentRoom = gs.getRoom(room.code);
+    if (!currentRoom) return;
+    const p = currentRoom.players.find((p2) => p2.id === player.id);
+    if (!p || p.connected) return; // they came back, nothing to do
+
+    const updated = gs.removePlayerById(room.code, player.id);
+    if (!updated) return; // room deleted (last player left)
+
+    // If witness hard-removed during a live game, auto-end the round
+    if (updated._witnessDisconnected && updated.phase === 'playing') {
+      updated._witnessDisconnected = false;
+      const ended = gs.endRound(room.code, 'witness-left', null);
       if (ended) {
         broadcastRoom(ended);
         return;
       }
     }
-  }
 
-  broadcastRoom(updated);
+    // If all lawyers hard-removed during a live game, auto-end the round
+    if (updated.phase === 'playing') {
+      const lawyersLeft = updated.players.filter(
+        (lp) => lp.role === 'lawyer' && lp.connected !== false
+      ).length;
+      if (lawyersLeft === 0) {
+        const ended = gs.endRound(room.code, 'manual', null);
+        if (ended) {
+          broadcastRoom(ended);
+          return;
+        }
+      }
+    }
+
+    broadcastRoom(updated);
+  }, 30_000);
+
+  // Broadcast immediately so other players see the disconnected state
+  broadcastRoom(room);
 }
 
 // Delete rooms that have been idle for more than 2 hours (memory leak prevention)

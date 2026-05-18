@@ -1,0 +1,53 @@
+{
+  "ages": [22, 26, 29, 31, 34, 37, 39, 42, 45, 48, 51, 54, 57, 61, 64, 67, 71],
+  "jobs": [
+    "accountant", "substitute teacher", "personal injury lawyer", "real estate agent",
+    "life coach", "middle manager", "freelance photographer", "dental hygienist",
+    "dog groomer", "social media consultant", "assistant to the regional manager",
+    "motivational speaker", "HR specialist", "notary public", "claims adjuster",
+    "parking enforcement officer", "yacht broker", "amateur sommelier",
+    "certified pilates instructor", "night auditor"
+  ],
+  "workplaces": [
+    "a regional accounting firm", "a failing startup", "a strip mall",
+    "a law firm that mostly does DUIs", "a Marriott hotel", "a mid-size insurance company",
+    "a school district with severe budget cuts", "a family-owned funeral home",
+    "a slightly sketchy wellness center", "a commercial real estate office",
+    "a dog grooming salon called 'Paws & Reflect'", "a company under SEC investigation",
+    "a coworking space that smells like coffee and regret", "a hospital's billing department",
+    "a timeshare resort in Orlando"
+  ],
+  "hobbies": [
+    "make sourdough bread even though no one asked",
+    "collect vintage sports memorabilia of teams you've never watched",
+    "argue in the comments sections of home improvement forums",
+    "do escape rooms alone to 'beat your personal record'",
+    "watch true crime documentaries and consider yourself an expert",
+    "maintain a very detailed spreadsheet of your personal finances",
+    "complain about the neighborhood on the NextDoor app",
+    "attend open houses with no intention of buying",
+    "practice your autograph even though you're not famous",
+    "take long baths while listening to self-help audiobooks",
+    "rewarch the same 3 shows on repeat and call it relaxing",
+    "buy outdoor gear for hikes you never go on",
+    "curate a Spotify playlist you've only shared with one person",
+    "photograph your meals before eating them"
+  ],
+  "traits": [
+    "surprisingly sensitive about your handshake",
+    "deeply convinced you were meant to be famous",
+    "allergic to confrontation but addicted to drama",
+    "the kind of person who cries at commercials but not at funerals",
+    "convinced you have better taste than everyone in the room",
+    "still bitter about something that happened in 2009",
+    "remarkably bad at reading the room",
+    "someone who has strong opinions about parking",
+    "the type who orders 'just a water' and then steals everyone's fries",
+    "secretly terrified of being perceived as boring",
+    "the last person in your friend group to admit when you're wrong",
+    "someone who laughs a little too loudly at your own jokes",
+    "quietly furious about something you won't bring up",
+    "inexplicably confident despite very little evidence you should be",
+    "the kind of person who says 'I'm a very private person' and then overshares immediately"
+  ]
+}
